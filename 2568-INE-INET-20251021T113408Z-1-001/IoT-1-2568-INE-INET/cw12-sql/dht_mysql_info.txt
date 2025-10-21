@@ -1,0 +1,18 @@
+http://pakinlab.atwebpages.com/
+
+'POST_DATA_URL', 'http://pakinlab.atwebpages.com/sensordata.php'
+
+db name
+4684267_pakindht
+
+db pass 
+1qazXSW@3edc
+
+db user
+4684267_pakindht
+
+db host
+fdb33.awardspace.net
+
+PROJECT_API_KEY
+pakinsqldht

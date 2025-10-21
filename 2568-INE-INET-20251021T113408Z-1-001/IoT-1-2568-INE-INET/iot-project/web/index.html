@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Aquarium Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg:#0b0f14;--fg:#e5e7eb;--muted:#9ca3af;--card:#111827;--border:#1f2937;
+      --accent:#2563eb;--ok:#10b981;--warn:#ef4444;--hot:#f59e0b;
+    }
+    [data-theme="light"]{
+      --bg:#f7f8fa;--fg:#0f172a;--muted:#6b7280;--card:#ffffff;--border:#e5e7eb;
+      --accent:#1d4ed8;--ok:#059669;--warn:#dc2626;--hot:#d97706;
+    }
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial}
+    .container{max-width:1200px;margin:24px auto;padding:0 16px}
+    .header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .title{font-size:20px;font-weight:700}
+    .muted{color:var(--muted)}
+    .grid{display:grid;gap:16px}
+    .cards{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+    .kpi{font-size:28px;font-weight:800}
+    .ok{color:var(--ok)} .warn{color:var(--warn)}
+    .row{display:flex;flex-wrap:wrap;gap:8px}
+    button{padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--fg);cursor:pointer}
+    .primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .danger{background:var(--warn);border-color:var(--warn);color:#fff}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+    .tab{padding:8px 12px;border:1px solid var(--border);border-radius:999px;cursor:pointer}
+    .tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    canvas{width:100%!important;max-height:320px!important}
+    table{width:100%;border-collapse:collapse;border-radius:12px;overflow:hidden}
+    th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;font-size:14px}
+    tr:last-child td{border-bottom:none}
+    code{background:rgba(125,125,125,.15);padding:2px 6px;border-radius:6px}
+    .footer{margin-top:18px;text-align:center;color:var(--muted);font-size:12px}
+    .spacer{height:4px}
+    .toggle{display:flex;gap:8px;align-items:center}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">🐠 Aquarium Dashboard</div>
+      <div class="row">
+        <div class="toggle">
+          <span class="muted">Theme</span>
+          <button id="theme" class="tab">Light</button>
+        </div>
+        <span class="muted">Updated: <code id="updated">-</code></span>
+      </div>
+    </div>
+
+    <!-- Live Status + Controls -->
+    <div class="grid cards">
+      <div class="card">
+        <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-weight:700">Live Status</div>
+          <span class="muted" id="wifi">Wi-Fi: -</span>
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+          <div><div class="muted">Temp (°C)</div><div class="kpi" id="temp">-</div></div>
+          <div><div class="muted">Humid (%)</div><div class="kpi" id="humid">-</div></div>
+          <div><div class="muted">Lux</div><div class="kpi" id="lux">-</div></div>
+          <div><div class="muted">Flow (L/min)</div><div class="kpi" id="flow">-</div></div>
+          <div><div class="muted">Pump</div><div class="kpi" id="pump">-</div></div>
+          <div><div class="muted">Light</div><div class="kpi" id="dark">-</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-weight:700">Controls</div>
+          <div class="muted">เขียนคำสั่งไปที่ <code>/commands</code></div>
+        </div>
+        <div class="row">
+          <button class="primary" id="btn-feed">🍽 Feed once</button>
+          <button class="primary" id="btn-pump-on">🔌 Pump ON</button>
+          <button class="danger"  id="btn-pump-off">❌ Pump OFF</button>
+          <button id="btn-refresh-graphs">📈 Refresh Graphs</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="spacer"></div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-weight:700">Sensor History</div>
+        <div class="toolbar">
+          <span class="muted">Toggle series:</span>
+          <label><input type="checkbox" class="series" data-series="temp" checked> Temp</label>
+          <label><input type="checkbox" class="series" data-series="humid" checked> Humid</label>
+          <label><input type="checkbox" class="series" data-series="lux" checked> Lux</label>
+          <label><input type="checkbox" class="series" data-series="flow" checked> Flow</label>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="combined">Combined</button>
+        <button class="tab" data-tab="temp">Temp</button>
+        <button class="tab" data-tab="humid">Humid</button>
+        <button class="tab" data-tab="lux">Lux</button>
+        <button class="tab" data-tab="flow">Flow</button>
+      </div>
+
+      <div id="panel-combined"><canvas id="chart-combined"></canvas></div>
+      <div id="panel-temp"   style="display:none"><canvas id="chart-temp"></canvas></div>
+      <div id="panel-humid"  style="display:none"><canvas id="chart-humid"></canvas></div>
+      <div id="panel-lux"    style="display:none"><canvas id="chart-lux"></canvas></div>
+      <div id="panel-flow"   style="display:none"><canvas id="chart-flow"></canvas></div>
+    </div>
+
+    <!-- Alerts & History tables -->
+    <div class="spacer"></div>
+    <div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+      <div class="card">
+        <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-weight:700">Alerts (ล่าสุด 10)</div>
+          <button id="refresh-alerts">Refresh</button>
+        </div>
+        <table id="tbl-alerts">
+          <thead><tr><th>Epoch</th><th>Datetime (TH)</th><th>Message</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-weight:700">History (ล่าสุด 10)</div>
+          <button id="refresh-history">Refresh</button>
+        </div>
+        <table id="tbl-history">
+          <thead><tr><th>Datetime (TH)</th><th>Temp</th><th>Humid</th><th>Lux</th><th>Flow</th><th>Pump</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="footer">© Smart Aquarium</div>
+  </div>
+
+  <!-- Firebase (module) -->
+  <script type="module">
+    // ======= โปรเจกต์ของคุณ =======
+    const firebaseConfig = {
+      apiKey: "AIzaSyCetfPmaEU7rS8xZZa5rzYFeRCirBwoUxw",
+      authDomain: "iot-project-90164.firebaseapp.com",
+      databaseURL: "https://iot-project-90164-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "iot-project-90164",
+      storageBucket: "iot-project-90164.appspot.com",
+      messagingSenderId: "000000000000",
+      appId: "1:000000000000:web:xxxxxxxxxxxxxxxx"
+    };
+
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getDatabase, ref, onValue, get, set, update, query, orderByKey, limitToLast } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+    const auth = getAuth(app);
+    await signInAnonymously(auth);
+
+    const $ = s=>document.querySelector(s);
+
+    // ---------- Time helpers (โซนไทย) ----------
+    const TZ = "Asia/Bangkok";
+    const fmtISO_TH = (iso, withSeconds=true) => {
+      if (!iso) return "-";
+      const d = new Date(iso);
+      return d.toLocaleString("th-TH", {
+        timeZone: TZ, weekday: "short", year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: withSeconds ? "2-digit" : undefined, hourCycle: "h23"
+      });
+    };
+
+    // ---- Theme toggle ----
+    const themeBtn = $("#theme");
+    const applyTheme = (t)=>{ document.documentElement.setAttribute("data-theme", t); themeBtn.textContent = t === "light" ? "Light" : "Dark"; }
+    let theme = localStorage.getItem("theme") || "light";
+    applyTheme(theme);
+    themeBtn.onclick = ()=>{ theme = (theme === "light" ? "dark" : "light"); localStorage.setItem("theme",theme); applyTheme(theme); };
+
+    // ---- Live status ----
+    onValue(ref(db,"/status"), snap=>{
+      const v=snap.val()||{};
+      $("#temp").textContent  = v.tempC?.toFixed?.(1) ?? "-";
+      $("#humid").textContent = v.humid?.toFixed?.(1) ?? "-";
+      $("#lux").textContent   = v.lux?.toFixed?.(1) ?? "-";
+      $("#flow").textContent  = v.flowLpm?.toFixed?.(2) ?? "-";
+      $("#pump").textContent  = v.pumpOn ? "ON" : "OFF";
+      $("#pump").className    = "kpi " + (v.pumpOn ? "ok":"warn");
+      $("#dark").textContent  = v.dark ? "Dark" : "Light";
+      $("#updated").textContent = (v.updatedAt ? v.updatedAt.replace("T"," ").slice(0,19) : "-");
+      $("#wifi").textContent  = "Wi-Fi: " + (v.ssid || "-");
+    });
+
+    // ---- Controls -> /commands ----
+    async function pushCommand(type){
+      const ts = Math.floor(Date.now()/1000).toString();
+      const payload = { type, ts:Number(ts), from:"web" };
+      await set(ref(db,"/commands/"+ts), payload);
+      await update(ref(db,"/commands"), { latest: payload });
+      alert("ส่งคำสั่ง: " + type);
+    }
+    $("#btn-feed").onclick    = ()=>pushCommand("feed");
+    $("#btn-pump-on").onclick = ()=>pushCommand("pump_on");
+    $("#btn-pump-off").onclick= ()=>pushCommand("pump_off");
+
+    // ---- Alerts (ล่าสุด 10) ----
+    async function loadAlerts(){
+      const q = query(ref(db,"/alerts/logs"), orderByKey(), limitToLast(10));
+      const snap = await get(q);
+      const tb = $("#tbl-alerts tbody"); tb.innerHTML="";
+      if(!snap.exists()) return;
+      const rows = Object.entries(snap.val()).sort((a,b)=> b[0].localeCompare(a[0]));
+      for(const [epoch, v] of rows){
+        const tr=document.createElement("tr");
+        tr.innerHTML = `
+          <td>${epoch}</td>
+          <td title="${v.ts ?? ""}">${fmtISO_TH(v.ts)}</td>
+          <td>${(v.message??"").toString().replace(/[<>]/g, "")}</td>`;
+        tb.appendChild(tr);
+      }
+    }
+    $("#refresh-alerts").onclick=loadAlerts;
+
+    // ---- History (ล่าสุด 10) — ใช้ ts (ISO) ให้ตรงกับกราฟ ----
+    async function loadHistoryTable(){
+      const q=query(ref(db,"/history"), orderByKey(), limitToLast(10));
+      const snap=await get(q);
+      const tb=$("#tbl-history tbody"); tb.innerHTML="";
+      if(!snap.exists()) return;
+
+      const rows=Object.entries(snap.val()).sort((a,b)=> b[0].localeCompare(a[0]));
+      for(const [epoch,v] of rows){
+        const dt = v.ts ? fmtISO_TH(v.ts, true) : "-"; // ใช้ ts เสมอ
+        const tr=document.createElement("tr");
+        tr.innerHTML = `
+          <td title="epoch:${epoch}">${dt}</td>
+          <td>${(v.tempC??NaN).toFixed?.(1) ?? "-"}</td>
+          <td>${(v.humid??NaN).toFixed?.(1) ?? "-"}</td>
+          <td>${(v.lux??NaN).toFixed?.(1) ?? "-"}</td>
+          <td>${(v.flowLpm??NaN).toFixed?.(2) ?? "-"}</td>
+          <td>${v.pumpOn?"ON":"OFF"}</td>`;
+        tb.appendChild(tr);
+      }
+    }
+    $("#refresh-history").onclick=loadHistoryTable;
+
+    // ---- Graphs (100 จุดล่าสุด) — อ้างอิง ts เช่นกัน ----
+    let charts = {};
+    function makeLine(label,data,color){
+      return { label, data, fill:false, tension:.25, borderColor: color, pointRadius:0, borderWidth:2 };
+    }
+    function buildOptions(title, arr){
+      return {
+        responsive:true,
+        plugins:{
+          legend:{position:"bottom"},
+          title:{display:true,text:title},
+          tooltip:{
+            mode:"index", intersect:false,
+            callbacks:{ title:(items)=> {
+              const i = items?.[0]?.dataIndex ?? 0;
+              return (arr[i]?.ts) ? fmtISO_TH(arr[i].ts, true) : "-";
+            } }
+          }
+        },
+        interaction:{mode:"index",intersect:false},
+        scales:{x:{title:{display:true,text:"Time"}}, y:{beginAtZero:true}}
+      };
+    }
+    const colors = { temp:"#ef4444", humid:"#3b82f6", lux:"#f59e0b", flow:"#10b981" };
+
+    async function loadGraphs(){
+      const q=query(ref(db,"/history"), orderByKey(), limitToLast(100));
+      const snap=await get(q);
+      if(!snap.exists()) return;
+
+      // เรียงตาม ts
+      const arr=Object.values(snap.val()).sort((a,b)=> new Date(a.ts)-new Date(b.ts));
+      const labels=arr.map(v=> (v.ts ? v.ts.replace("T"," ").slice(0,16) : "-"));
+      const ds = {
+        temp: arr.map(v=>v.tempC),
+        humid:arr.map(v=>v.humid),
+        lux:  arr.map(v=>v.lux),
+        flow: arr.map(v=>v.flowLpm)
+      };
+
+      // Combined
+      const ctxC = document.getElementById("chart-combined").getContext("2d");
+      if(charts.combined) charts.combined.destroy();
+      charts.combined = new Chart(ctxC, {
+        type:"line",
+        data:{ labels, datasets:[
+          makeLine("Temp °C", ds.temp, colors.temp),
+          makeLine("Humid %", ds.humid, colors.humid),
+          makeLine("Lux",     ds.lux, colors.lux),
+          makeLine("Flow L/min", ds.flow, colors.flow)
+        ]},
+        options: buildOptions("Combined Sensors", arr)
+      });
+
+      // Individual charts
+      const labelMap = {temp:"Temp °C", humid:"Humid %", lux:"Lux", flow:"Flow L/min"};
+      for (const key of ["temp","humid","lux","flow"]) {
+        const id = "chart-" + key;
+        const ctx = document.getElementById(id).getContext("2d");
+        if(charts[key]) charts[key].destroy();
+        charts[key] = new Chart(ctx, {
+          type:"line",
+          data:{ labels, datasets:[ makeLine(labelMap[key], ds[key], colors[key]) ] },
+          options: buildOptions(labelMap[key], arr)
+        });
+      }
+
+      // Sync toggle series
+      document.querySelectorAll(".series").forEach(cb=>{
+        const series = cb.dataset.series;
+        const idx = {temp:0, humid:1, lux:2, flow:3}[series];
+        charts.combined.data.datasets[idx].hidden = !cb.checked;
+      });
+      charts.combined.update();
+    }
+
+    // Tabs switching
+    document.querySelectorAll(".tab").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active");
+        const tab = btn.dataset.tab;
+        ["combined","temp","humid","lux","flow"].forEach(t=>{
+          document.getElementById("panel-"+t).style.display = (t===tab) ? "block":"none";
+        });
+      });
+    });
+
+    // Toggle dataset visibility on combined
+    document.querySelectorAll(".series").forEach(cb=>{
+      cb.addEventListener("change", ()=>{
+        if(!charts.combined) return;
+        const idx = {temp:0, humid:1, lux:2, flow:3}[cb.dataset.series];
+        charts.combined.data.datasets[idx].hidden = !cb.checked;
+        charts.combined.update();
+      });
+    });
+
+    // Buttons
+    $("#btn-refresh-graphs").onclick = ()=>{ loadGraphs(); loadHistoryTable(); loadAlerts(); };
+
+    // Initial loads
+    loadGraphs();
+    loadHistoryTable();
+    loadAlerts();
+  </script>
+</body>
+</html>
